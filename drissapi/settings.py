@@ -50,6 +50,7 @@ INSTALLED_APPS = [
     'social_django',
     'rest_framework_social_oauth2',
     'api',
+    'homeapp',
 ]
 
 SITE_ID = 1
@@ -91,7 +92,7 @@ WSGI_APPLICATION = 'drissapi.wsgi.application'
 
 
 
-BASE_URL="http://104.248.228.29:3333"
+BASE_URL="https://smartartech.org/api"
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_USE_TLS = True
@@ -155,6 +156,7 @@ USE_TZ = True
 STATIC_URL = '/static/'
 MEDIA_URL = '/media/'
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 
 REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': (
@@ -235,7 +237,7 @@ JWT_AUTH = {
 'JWT_PAYLOAD_GET_USERNAME_HANDLER':'api.user.jwt_get_username_from_payload_handler',
 'JWT_PUBLIC_KEY': publickey,
 'JWT_ALGORITHM': 'RS256',
-'JWT_AUDIENCE': 'http://104.248.228.29:2222/api/',
+'JWT_AUDIENCE': 'http://104.248.228.29:3333/api/',
 'JWT_ISSUER': 'dev-1gq9bmi0.auth0.com',
 'JWT_AUTH_HEADER_PREFIX': 'Bearer',
 'JWT_VERIFY': False,

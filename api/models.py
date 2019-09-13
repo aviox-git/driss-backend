@@ -52,7 +52,7 @@ class LegelEntity(models.Model):
 
 class ActivtiesDetail(models.Model):
 	activties = models.ForeignKey(Activties,on_delete=models.DO_NOTHING,null=True, blank=True)
-	phonenumber = models.BigIntegerField(null=True, blank=True)
+	phonenumber = models.CharField(max_length=20,null=True, blank=True)
 	phonenumber_status = models.BooleanField(null=True,blank=True,default=False)
 	website = models.CharField(max_length=300,null=True, blank=True)
 	website_status = models.BooleanField(null=True,blank=True)
@@ -97,6 +97,7 @@ class Profile(models.Model):
 	longitude = models.FloatField(null=True,blank=True)
 	latitude  = models.FloatField(null=True,blank=True)
 	details = models.ForeignKey(ActivtiesDetail,on_delete=models.DO_NOTHING,null=True,blank=True)
+	activity_status = models.BooleanField(null=True,blank=True,default=False)
 	status = models.CharField(max_length=100,choices=Status_Choices,null=True,blank=True)
 	types = models.CharField(max_length=100,choices=Type_Choices,null=True,blank=True)
 	create_datetime  = models.DateTimeField(default=timezone.now,null=True,blank=True)
@@ -163,7 +164,7 @@ class CompanyActivties(models.Model):
 	
 class CompanyActivtiesDetail(models.Model):
 	activties = models.ForeignKey(CompanyActivties,on_delete=models.DO_NOTHING,null=True, blank=True)
-	phonenumber = models.BigIntegerField(null=True, blank=True)
+	phonenumber = models.CharField(max_length=20,null=True, blank=True)
 	phonenumber_status = models.BooleanField(null=True,blank=True)
 	website = models.CharField(max_length=300,null=True, blank=True)
 	website_status = models.BooleanField(null=True,blank=True)
@@ -201,6 +202,7 @@ class CompanyProfile(models.Model):
 	modver_datetime = models.CharField(default='9999-12-31 00:00:00',max_length=100,null=True,blank=True)
 	original_id = models.CharField(max_length=100,null=True,blank=True)
 	created_by_id = models.CharField(max_length=100,null=True,blank=True)
+	activity_status = models.BooleanField(null=True,blank=True,default=False)
 
 	class Meta:
 		db_table = "t_company_profile"

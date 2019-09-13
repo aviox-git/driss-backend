@@ -51,9 +51,13 @@ class CustomAuthentication(authentication.BaseAuthentication):
 
 	def authenticate(self, request):
 		username = request.data['username']
+		username = username.lower()
 		password = request.data['password']
 		user_type = request.data['user_type']
-		if user_type==0:
+		# name = request.data['name']
+		# email = request.data['email']
+		print(request.data)
+		if int(user_type)==0:
 			if not username:
 				raise exceptions.AuthenticationFailed('Email not provided.')
 			if not password:
@@ -76,9 +80,15 @@ class CustomAuthentication(authentication.BaseAuthentication):
 				raise exceptions.AuthenticationFailed('Socialid is required.')
 			
 			try:
-				user = User.objects.get(email=username)
+				user = User.objects.get(username=username)
 			except User.DoesNotExist:
-				raise exceptions.AuthenticationFailed('Invalid social account id.')
+				try:
+					user = User.objects.get(email=email)
+					print(user.username)
+					raise exceptions.AuthenticationFailed('Email already exists.')
+				except User.DoesNotExist:
+					user = User.objects.create(username=username,email=email,first_name=name)
+					Profile.objects.create(users=user)
 
 			if not user.is_active:
 				raise exceptions.AuthenticationFailed('User inactive or deleted.')
@@ -145,14 +155,13 @@ class RegisterationView(views.APIView):
 		elif not phonenumber:
 			
 			raise exceptions.ParseError("Phone Number cannot be blank.")
-		elif number_length < 10:
+		elif number_length > 15:
 			
 			raise exceptions.ParseError("Please enter 10 digit mobile number.")
-		elif number_length > 10:
-			
+		elif number_length < 10:
 			raise exceptions.ParseError("Please enter 10 digit mobile number.")
 		else:
-
+			email = email.lower()
 			profile = Profile.objects.filter(phone=phonenumber)
 			if profile:
 				raise exceptions.ParseError("Phone number already exists.")
@@ -269,7 +278,7 @@ class UserDetailView(views.APIView):
 	authentication_classes = ( SessionAuthentication,JSONWebTokenAuthentication)
 	permission_classes = (IsAuthenticated,)
 	def get(self, request, *args, **kwargs):
-		try:
+		try:	
 			profile = Profile.objects.get(users=request.user)
 			user = {}
 			user_id =  request.user.id
@@ -317,75 +326,86 @@ class CompanyDetailView(views.APIView):
 					if code:
 						picture_list = code[0].getAllImages()
 				else:
-					code = Profile.objects.filter(id=company_id)
+					user = User.objects.get(id=company_id)
+					code = Profile.objects.filter(users=user)
 					emptylist = []
 				previouswork = []
 				for company in code:
 					fdict = {}
 					previouswork = company.getAllImages()
-					if company.profile_pic:
-						pictures = company.getSingleImageUrl()
-					else:
-						pictures = ""
+					phonenumber = ""
+					pictures = company.getSingleImageUrl()
 					companyname = company.companyname
-					legal = ""
+					if int(profile_type) == 0:
+						if not companyname:
+							user = User.objects.get(id=company_id)
+							companyname = user.first_name
+					
+					legalentitytype = 1
 					if company.legalentitytype:
-						legal = company.legalentitytype.name
-					print(legal)
-					legalentitytype = str(legal)
+						legalentitytype = company.legalentitytype.id
+					street = ""
 					if int(profile_type) == 1:
 						street = company.street
 					else:
-						state = company.state
+						street = company.state
 					city = company.city
 					country = company.country
 					postcode = company.postcode
 					longitude = company.longitude
 					latitude = company.latitude
-					phonenumber = ""
+					
 					website = ""
 					descripiton = ""
+					activity = ""
+					phonenumber_status = False
+					website_status = False
 					if company.details:
 						phonenumber = company.details.phonenumber
+						phonenumber_status  = company.details.phonenumber_status
 						website = company.details.website
+						website_status = company.details.website_status
 						descripiton = company.details.descripiton
+						activity = company.details.activties.id
+					else:
+						if company.phone and int(profile_type) == 0:
+							phonenumber = company.phone
+					activity_status = company.activity_status
 					status = company.status
 					companyname_status = company.companyname_status
 					legalentitytype_status = company.legalentitytype_status
 					city_status = company.city_status
-					if int(profile_type) == 1:
-						street_status = company.street_status
+					street_status = False
+					if int(profile_type) == 0:
+						street_status = company.state_status
 					else:
-						state_status = company.state_status
+						street_status = company.street_status
 					country_status = company.country_status
 					postcode_status = company.postcode_status
 					
 					fdict['companyname'] = companyname
 					fdict['legalentitytype'] = legalentitytype
 					fdict['profile_pic'] = pictures
-					if int(profile_type) == 1:
-						fdict['street'] = street
-					else:
-						fdict['state'] = state
+					fdict['street'] = street
 					fdict['city'] = city
 					fdict['country'] = country
 					fdict['postcode'] = postcode
 					fdict['longitude'] = longitude
 					fdict['latitude'] = latitude
 					fdict['phonenumber'] = phonenumber
+					fdict['phonenumber_status'] = phonenumber_status
 					fdict['website'] = website
-					fdict['descripiton'] = descripiton
+					fdict['website_status'] = website_status
+					fdict['description'] = descripiton
 					fdict['status'] = status
 					fdict['companyname_status'] = companyname_status
 					fdict['legalentitytype_status'] = legalentitytype_status
 					fdict['city_status'] = city_status
-					if int(profile_type) == 1:
-						fdict['street_status'] = street_status
-					else:
-						fdict['state_status'] = state_status
-					
+					fdict['street_status'] = street_status
 					fdict['country_status'] = country_status
 					fdict['postcode_status'] = postcode_status
+					fdict['activity'] = activity
+					fdict['activity_status'] = activity_status
 					if int(profile_type) == 1:
 						fdict["images"]=picture_list
 					else:
@@ -408,23 +428,22 @@ class CompanyDetailView(views.APIView):
 
 	def post(self, request, format=None, *args, **kwargs):
 		try:
-			print(request.FILES)
-			print(request.POST)
-	
 			companyname = request.data.get("name")
 			companyid = request.data.get('companyid')
 			profile_pic = request.FILES.get('profile_pic')
 			legalentitytype = request.data.get('legalentitytype')
 			street = request.data.get('street')
-			state = request.data.get("state")
 			city = request.data.get('city')
 			country = request.data.get('country')
 			postalcode = request.data.get('postalcode')
 			longitude = request.data.get('longitude')
 			latitude = request.data.get('latitude')
-			activties = request.data.get('activties')
+			activties = request.data.get('activity')
+			activity_status = request.data.get('activity_status')
 			phonenumber = request.data.get('phonenumber')
+			phonenumber_status = request.data.get("phonenumber_status")
 			website = request.data.get('website')
+			website_status = request.data.get("website_status")
 			descripiton = request.data.get('descripiton')
 			status = request.data.get('published_status')
 			profile_type = request.data.get('profile_type')
@@ -432,99 +451,128 @@ class CompanyDetailView(views.APIView):
 			legalentitytype_status = request.data.get('legalentitytype_status')
 			city_status = request.data.get('city_status')
 			street_status = request.data.get('street_status')
-			state_status = request.data.get('state_status')
 			country_status = request.data.get('country_status')
 			postcode_status = request.data.get('postcode_status') 
 			picture_length = request.data.get("picture_length")
-
-
 			if status=="true":
 				status = 1
 			else:
 				status = 0
-			if companynames_status=="true":
-				companynames_status = 1
+
+			if phonenumber_status=="true":
+				phonenumber_status = 1
 			else:
-				companynames_status = 0
-			if legalentitytype_status=="true":
-				legalentitytype_status = 1
+				phonenumber_status = 0
+
+			if activity_status=="true":
+				activity_status = 1
 			else:
-				legalentitytype_status = 0
+				activity_status = 0
+
+			if website_status=="true":
+				website_status = 1
+			else:
+				website_status = 0
 			
-			if city_status=="true":
-				city_status = 1
-			else:
-				city_status = 0
-		
 			
-			if country_status=="true":
-				country_status = 1
-			else:
-				country_status = 0
 			
-			if postcode_status=="true":
-				postcode_status = 1
-			else:
-				postcode_status = 0
-			legal,created = LegelEntity.objects.get_or_create(name=legalentitytype)
-			if int(profile_type) == 1:
-				act,created = CompanyActivties.objects.get_or_create(activties=activties)
-				det, created = CompanyActivtiesDetail.objects.get_or_create(activties=act)
-				det.phonenumber = phonenumber
-				det.website = website
-				det.descripiton = descripiton
-				det.save()
-			else:
-				act,created = Activties.objects.get_or_create(activties=activties)
-				det, created = ActivtiesDetail.objects.get_or_create(activties=act)
-				det.phonenumber = phonenumber
-				det.website = website
-				det.descripiton = descripiton
-				det.save()
+			legalentity = LegelEntity.objects.get(id=int(legalentitytype))
+			user = None
+
 			if int(profile_type) == 1:
 				if companyid:
 					code = CompanyProfile.objects.get(id=companyid)
 				else:
+					user = User.objects.get(id=request.user.id)
+					user.first_name = companyname
+					user.save()
 					code = CompanyProfile.objects.create(owner=request.user)
 			else:
-				if companyid:
-					code = Profile.objects.get(id=companyid)
+
+				code = Profile.objects.get(users=request.user)
+				user = User.objects.get(id=request.user.id)
+				user.first_name = companyname
+				user.save()
+
+			act_obj = None
+			if int(profile_type) == 1:
+				act_obj = CompanyActivties.objects.get(id=int(activties))
+			else:
+				act_obj = Activties.objects.get(id=int(activties))
+			if code.details:
+				code.details.activties = act_obj
+				code.details.phonenumber = phonenumber
+				code.details.phonenumber_status = phonenumber_status
+				code.details.website = website
+				code.details.website_status = website_status
+				code.details.descripiton = descripiton
+				code.details.save()
+			else:
+				if int(profile_type) == 1:
+					act_detail_obj = CompanyActivtiesDetail.objects.create(activties=act_obj)
 				else:
-					code = Profile.objects.get(users=request.user)
+					act_detail_obj = ActivtiesDetail.objects.create(activties=act_obj)
+				act_detail_obj.activties = act_obj
+				act_detail_obj.phonenumber = phonenumber
+				act_detail_obj.phonenumber_status = phonenumber_status
+				act_detail_obj.website = website
+				act_detail_obj.website_status = website_status
+				act_detail_obj.descripiton = descripiton
+				act_detail_obj.save()
+				code.details = act_detail_obj
+
 
 			code.modver_datetime = timezone.now()
-			# code.profile_pic = picture
+			if profile_pic:
+				code.profile_pic = profile_pic
 			code.companyname = companyname
-			code.legalentitytype = legal
+			code.activity_status = activity_status
+			code.legalentitytype = legalentity
 			if int(profile_type) == 1:
 				code.street = street
 			else:
-				code.state = state
-			if int(profile_type) == 1:
-				if street_status=="true":
-					street_status = 1
-				else:
-					street_status = 0
-			else:
-				if state_status=="true":
-					state_status = 1
-				else:
-					state_status = 0
+				code.state = street
 			
 	
 			code.city = city
 			code.country = country
 			code.postcode = postalcode
+			if companynames_status=="true":
+				companynames_status = 1
+			else:
+				companynames_status = 0
 			code.companyname_status = companynames_status
+			if legalentitytype_status=="true":
+				legalentitytype_status = 1
+			else:
+				legalentitytype_status = 0
 			code.legalentitytype_status = legalentitytype_status
+			if city_status=="true":
+				city_status = 1
+			else:
+				city_status = 0
 			code.city_status = city_status
-			code.street_status = street_status
+			if street_status=="true":
+				street_status = 1
+			else:
+				street_status = 0
+			if int(profile_type) == 1:
+				code.street_status = street_status
+			else:
+				code.state_status = street_status
+			if country_status=="true":
+				country_status = 1
+			else:
+				country_status = 0
 			code.country_status = country_status
+			if postcode_status=="true":
+				postcode_status = 1
+			else:
+				postcode_status = 0
 			code.postcode_status = postcode_status
 			code.created_by_id = request.user.id
 			code.longitude = longitude
 			code.latitude = latitude
-			code.details = det
 			code.status = status
 			code.profile_pic = profile_pic
 			code.types = profile_type
@@ -532,7 +580,6 @@ class CompanyDetailView(views.APIView):
 			code.save()
 			for i in range(1,int(picture_length)+1) :
 				picture = request.FILES.get('picture%s' % i)
-				print(picture)
 				if int(profile_type) == 1:
 					data=CompanyImages(profile=code,images=picture)
 					data.save()
@@ -553,25 +600,33 @@ class CompanyDetailView(views.APIView):
 					'status':'success',
 					'message':'Company profile created successfully.',
 					"data":{
-						"id":code.id
+						"id":user.id
 					}
 					}
 			else:
 				if companyid:
 					content = {
-					'status':'success',
-					'message':'User profile updates successfully.',
-					"data":{
-						"id":code.id
-					}
+						'status':'success',
+						'message':'User profile updates successfully.',
+						"data":{
+							"id":user.id,
+							"name":user.first_name,
+							"email":user.email,
+							"phonenumber":code.phone,
+							"profile_pic":code.getSingleImageUrl()
+						}
 					}
 				else:
 					content = {
-					'status':'success',
-					'message':'User profile craeted successfully.',
-					"data":{
-						"id":code.id
-					}
+						'status':'success',
+						'message':'User profile craeted successfully.',
+						"data":{
+							"id":user.id,
+							"name":user.first_name,
+							"email":user.email,
+							"phonenumber":code.phone,
+							"profile_pic":code.getSingleImageUrl()
+						}
 					}
 			return Response(content)
 		except Exception as e:
@@ -584,23 +639,33 @@ class CompanyList(views.APIView):
 	permission_classes = (IsAuthenticated,)
 	def get(self,request):
 		try:
-			obj = CompanyProfile.objects.filter(status="1")
-			print(obj)
+			obj = CompanyProfile.objects.filter(owner=request.user)
 			emptylist = []
 			for company in obj:
 				fdict = {}
 				companyname = company.companyname
 				legalentitytype = company.legalentitytype
-				legal = legalentitytype.name
+				legal = ""
+				if legalentitytype:
+					legal = legalentitytype.name
+					legalentitytypeid = legalentitytype.id
 				street = company.street
 				city = company.city
 				country = company.country
 				postcode = company.postcode
 				longitude = company.longitude
 				latitude = company.latitude
-				phonenumber = company.details.phonenumber
-				website = company.details.website
-				descripiton = company.details.descripiton
+				phonenumber_status = False
+				website = ""
+				website_status = False
+				descripiton = ""
+				phonenumber = ""
+				if company.details:
+					phonenumber = company.details.phonenumber
+					phonenumber_status = company.details.phonenumber_status
+					website = company.details.website
+					website_status = company.details.website_status
+					descripiton = company.details.descripiton
 
 				image1 = company.getSingleImageUrl()
 				status = company.status
@@ -610,7 +675,9 @@ class CompanyList(views.APIView):
 				street_status = company.street_status
 				country_status = company.country_status
 				postcode_status = company.postcode_status
+				fdict['id'] = company.id
 				fdict['companyname'] = companyname
+				fdict['legalentitytypeid'] = legalentitytypeid
 				fdict['legalentitytype'] = legal
 				fdict['street'] = street
 				fdict['city'] = city
@@ -619,8 +686,10 @@ class CompanyList(views.APIView):
 				fdict['longitude'] = longitude
 				fdict['latitude'] = latitude
 				fdict['phonenumber'] = phonenumber
+				fdict['phonenumber_status'] = phonenumber_status
 				fdict['website'] = website
-				fdict['descripiton'] = descripiton
+				fdict['website_status'] = website_status
+				fdict['description'] = descripiton
 				fdict['image'] = image1
 				fdict['status'] = status
 				fdict['companyname_status'] = companyname_status
@@ -645,36 +714,115 @@ class Location(views.APIView):
 	def post(self,request):
 		try:
 			obj1 = request.data.get('latitude')
-			latitude = float(obj1)
+			if not obj1:
+				obj1 = request.POST.get('latitude')
 			obj2 = request.data.get('longitude')
+			if not obj2:
+				obj2 = request.POST.get('latitude')
+			latitude = float(obj1)
+			if not obj1 or not obj2:
+				content = {
+				'status':'error',
+				'message':"Cordinates must be provided."
+				}
+				return Response(content)
 			longitude = float(obj2)
 			companydistances = CompanyProfile.objects.raw('Select * from (SELECT *,  ( 3959 * acos( cos( radians(%s) ) * cos( radians( latitude ) )* cos( radians( longitude ) - radians(%s) ) + sin( radians(%s) ) * sin(radians(latitude)) ) ) AS distance FROM t_company_profile ) al  where distance < 10 ORDER BY distance; ' % (latitude,longitude,latitude))
 			profiledistance = Profile.objects.raw('Select * from (SELECT *,  ( 3959 * acos( cos( radians(%s) ) * cos( radians( latitude ) )* cos( radians( longitude ) - radians(%s) ) + sin( radians(%s) ) * sin(radians(latitude)) ) ) AS distance FROM t_user_profile ) al  where distance < 10 ORDER BY distance ; ' % (latitude,longitude,latitude))
 			emptylist = []
-			combined = list(companydistances) + list(profiledistance)
-			for objs in combined:
-				emptydict = {}
-				companyname = objs.companyname
-				companyid = objs.id
-				companydistance = objs.distance
-				companylongitude = objs.longitude
-				companylatitude = objs.latitude
-				emptydict['companyname'] = companyname
-				emptydict['companyid'] = companyid
-				emptydict['companylongitude'] = companylongitude
-				emptydict['companylatitude'] = companylatitude
-				emptydict['companydistance'] = companydistance
-				emptylist.append(emptydict)
-
-			emptylist.sort(key=lambda k : k['companydistance'])
+			for objs in companydistances:
+				if objs.status:
+					emptydict = {}
+					companyname = objs.companyname
+					companyid = objs.id
+					companydistance = objs.distance
+					companylongitude = objs.longitude
+					companylatitude = objs.latitude
+					emptydict['companyname'] = companyname
+					emptydict['companyid'] = companyid
+					emptydict['companylongitude'] = companylongitude
+					emptydict['companylatitude'] = companylatitude
+					emptydict['companydistance'] = companydistance
+					emptydict['profile_type'] = 1
+					emptydict['profile_image'] = objs.getSingleImageUrl()
+					emptydict['other_images'] = objs.getAllImages()
+					emptydict['location'] = objs.city
+					emptydict['location_status'] = objs.city_status
+					emptydict['legalentitytypeid'] = objs.legalentitytype.id
+					emptydict['legalentitytype'] = objs.legalentitytype.name
+					emptydict['street'] = objs.street
+					emptydict['city'] = objs.city
+					emptydict['country'] = objs.country
+					emptydict['postcode'] = objs.postcode
+					emptydict['status'] = objs.status
+					emptydict['companyname_status'] = objs.companyname_status
+					emptydict['legalentitytype_status'] = objs.legalentitytype_status
+					emptydict['city_status'] = objs.city_status
+					emptydict['street_status'] = objs.street_status
+					emptydict['country_status'] = objs.country_status
+					emptydict['postcode_status'] = objs.postcode_status
+					emptydict['distance_status'] = True
+					emptydict['activity'] = ""
+					emptydict['activity_status']= objs.activity_status
+					if objs.details:
+						emptydict['description'] = objs.details.descripiton
+						emptydict['phonenumber'] = objs.details.phonenumber
+						emptydict['phonenumber_status'] = objs.details.phonenumber_status
+						emptydict['website'] = objs.details.website
+						emptydict['website_status'] = objs.details.website_status
+						emptydict['activity'] = objs.details.activties.activties
+					emptylist.append(emptydict)
+			for objs in profiledistance:
+				if objs.status:
+					emptydict = {}
+					companyname = objs.companyname
+					companyid = objs.id
+					companydistance = objs.distance
+					companylongitude = objs.longitude
+					companylatitude = objs.latitude
+					emptydict['companyname'] = companyname
+					emptydict['companyid'] = companyid
+					emptydict['companylongitude'] = companylongitude
+					emptydict['companylatitude'] = companylatitude
+					emptydict['companydistance'] = companydistance
+					emptydict['profile_type'] = 0
+					emptydict['profile_image'] = objs.getSingleImageUrl()
+					emptydict['other_images'] = objs.getAllImages()
+					emptydict['location'] = objs.city
+					emptydict['location_status'] = objs.city_status
+					emptydict['legalentitytypeid'] = objs.legalentitytype.id
+					emptydict['legalentitytype'] = objs.legalentitytype.name
+					emptydict['street'] = objs.state
+					emptydict['city'] = objs.city
+					emptydict['country'] = objs.country
+					emptydict['postcode'] = objs.postcode
+					emptydict['status'] = objs.status
+					emptydict['companyname_status'] = objs.companyname_status
+					emptydict['legalentitytype_status'] = objs.legalentitytype_status
+					emptydict['city_status'] = objs.city_status
+					emptydict['street_status'] = objs.state_status
+					emptydict['country_status'] = objs.country_status
+					emptydict['postcode_status'] = objs.postcode_status
+					emptydict['distance_status'] = True
+					emptydict['activity'] = ""
+					emptydict['activity_status']= objs.activity_status
+					if objs.details:
+						emptydict['description'] = objs.details.descripiton
+						emptydict['phonenumber'] = objs.details.phonenumber
+						emptydict['phonenumber_status'] = objs.details.phonenumber_status
+						emptydict['website'] = objs.details.website
+						emptydict['website_status'] = objs.details.website_status
+						emptydict['activity'] = objs.details.activties.activties
+					emptylist.append(emptydict)
+				emptylist.sort(key=lambda k : k['companydistance'])
 			content = {
 			'status':'success',
-			'comapnydata':emptylist
+			'data':emptylist
 			}
 			return Response(content)
 		except Exception as e:
 			print(str(e))
-			raise exceptions.ParseError("Invalid coordinates.")
+			raise exceptions.ParseError(str(e))
 
 
 
@@ -689,7 +837,8 @@ def distanceCal(lon1, lat1, lon2, lat2):
 	"""
 	# convert decimal degrees to radians 
 	lon1, lat1, lon2, lat2 = map(radians, [float(lon1), float(lat1), float(lon2), float(lat2)])
-
+	print(lon1)
+	print(lon1)
 	# haversine formula 
 	dlon = lon2 - lon1 
 	dlat = lat2 - lat1 
@@ -707,124 +856,157 @@ class Search(views.APIView):
 			latitude = request.data.get('latitude')
 			NElongitude = request.data.get("NElongitude")
 			NElatitude = request.data.get("NElatitude")
-
+			clongitude = request.data.get("current_long")
+			clatitude = request.data.get("current_lat")
+			long_list = []
+			lat_list = []
+			if str(longitude) == "0":
+				longitude = None
+			if str(latitude) == "0":
+				latitude = None
 			if not keyword:
 				raise exceptions.ParseError("Search keyword cannot be empty.")	
 
 			companysearch = CompanyProfile.objects.filter(Q(companyname__icontains=keyword) | Q(details__descripiton__icontains=keyword) | Q(details__activties__activties__icontains=keyword) )
 			profilesearch = Profile.objects.filter((Q(companyname__icontains=keyword)| Q(details__descripiton__icontains=keyword)| Q(details__activties__activties__icontains=keyword)))
+
 			emptylist = []
-			if keyword and not longitude and not longitude:
 
-				for company in companysearch:
-					emptydict = {}
-					emptydict['companyname'] = company.companyname
-					emptydict['id'] = company.id
-					emptydict['longitude'] = company.longitude
-					emptydict['latitude'] = company.latitude
-					emptydict['profile_type'] = 1
-					emptydict['descripiton'] = company.details.descripiton
-					emptydict['profile_image'] = company.getSingleImageUrl()
-					emptydict['other_images'] = company.getAllImages()
-					emptylist.append(emptydict)
-				for indivisual in profilesearch:
-					emptydict = {}
-					emptydict['companyname'] = indivisual.companyname
-					emptydict['id'] = indivisual.id
-					emptydict['longitude'] = indivisual.longitude
-					emptydict['latitude'] = indivisual.latitude
-					emptydict['profile_type'] = 0
-					emptydict['descripiton'] = indivisual.details.descripiton
-					if indivisual.profile_pic:
-						emptydict['profile_image'] = settings.BASE_URL+indivisual.profile_pic.url
-					else:
-						emptydict['profile_image'] = ""
-					emptydict['other_images'] = indivisual.getAllImages()
-					emptylist.append(emptydict)
-				# print(emptylist)
-				if emptylist:
-					content = {
-					'status':'success',
-					'comapnydata': emptylist
-					}
-					return Response(content)
-				else:
-					raise exceptions.ParseError("No result found.")
-			else:
-				"""
-				 call function distanceCal using request parameters i.e
-					longitude
-					latitude
-					NElongitude
-					NElatitude
-				then save return result in a variable
-				intial_distance
-				"""
-				intial_distance = 10
-				if NElongitude and NElatitude:
-					intial_distance = distanceCal(float(longitude),float(latitude),float(NElongitude),float(NElatitude))		
-				# companydistances = CompanyProfile.objects.raw('Select * from (SELECT *,  ( 3959 * acos( cos( radians(%s) ) * cos( radians( latitude ) )* cos( radians( longitude ) - radians(%s) ) + sin( radians(%s) ) * sin(radians(latitude)) ) ) AS distance FROM t_company_profile) al where distance < 10 ORDER BY distance; ' % (latitude,longitude,latitude))
-				# print(dir(companydistances))
-				# profiledistance = Profile.objects.raw('Select * from (SELECT *,  ( 3959 * acos( cos( radians(%s) ) * cos( radians( latitude ) )* cos( radians( longitude ) - radians(%s) ) + sin( radians(%s) ) * sin(radians(latitude)) ) ) AS distance FROM t_user_profile ) al where distance < 10 ORDER BY distance; ' % (latitude,longitude,latitude))
+			"""
+			 call function distanceCal using request parameters i.e
+				longitude
+				latitude
+				NElongitude
+				NElatitude
+			then save return result in a variable
+			intial_distance
+			"""
+			intial_distance = 10
+			if NElongitude and NElatitude:
+				intial_distance = distanceCal(float(longitude),float(latitude),float(NElongitude),float(NElatitude))		
+			# companydistances = CompanyProfile.objects.raw('Select * from (SELECT *,  ( 3959 * acos( cos( radians(%s) ) * cos( radians( latitude ) )* cos( radians( longitude ) - radians(%s) ) + sin( radians(%s) ) * sin(radians(latitude)) ) ) AS distance FROM t_company_profile) al where distance < 10 ORDER BY distance; ' % (latitude,longitude,latitude))
+			# print(dir(companydistances))
+			# profiledistance = Profile.objects.raw('Select * from (SELECT *,  ( 3959 * acos( cos( radians(%s) ) * cos( radians( latitude ) )* cos( radians( longitude ) - radians(%s) ) + sin( radians(%s) ) * sin(radians(latitude)) ) ) AS distance FROM t_user_profile ) al where distance < 10 ORDER BY distance; ' % (latitude,longitude,latitude))
 
-				for company in companysearch:
-					"""
-					 call function distanceCal using request parameters i.e
-						longitude
-						latitude
-						company.longitude
-						company.latutude
-					compare the return result with request parm return result
-					if true then run the inner code otherwise 
-					continue to next value in the loop
-					(<=)
-					company _distance
-					company_distanc<=intial_distance
-					"""
+			for company in companysearch:
+				if company.status:
 					company_lontitude = company.longitude
 					company_latitude = company.latitude
 					company_distance =  distanceCal(longitude,latitude,company_lontitude,company_latitude)
 					if company_distance <= intial_distance:
 						emptydict = {}
+						long_list.append(company.longitude)
+						lat_list.append(company.latitude)
 						emptydict['companyname'] = company.companyname
 						emptydict['id'] = company.id
 						emptydict['longitude'] = company.longitude
 						emptydict['latitude'] = company.latitude
 						emptydict['profile_type'] = 1
-						emptydict['descripiton'] = company.details.descripiton
+
 						emptydict['profile_image'] = company.getSingleImageUrl()
 						emptydict['other_images'] = company.getAllImages()
-						emptydict['distance'] = company_distance
+						if clongitude and clatitude:
+							emptydict['companydistance'] = distanceCal(clongitude,clatitude,company_lontitude,company_latitude)
+						else:
+							emptydict['companydistance'] = company_distance
+						emptydict['location'] = company.street
+						emptydict['legalentitytype'] = company.legalentitytype.name
+						emptydict['legalentityid'] = company.legalentitytype.id
+						emptydict['street'] = company.street
+						emptydict['city'] = company.city
+						emptydict['country'] = company.country
+						emptydict['postcode'] = company.postcode
+						emptydict['description'] = ""
+						emptydict['phonenumber'] = ""
+						emptydict['phonenumber_status'] = False
+						emptydict['website'] = ""
+						emptydict['website_status'] = False
+						emptydict['activity'] = ""
+						emptydict['activity_status']= company.activity_status
+						if company.details:
+							emptydict['description'] = company.details.descripiton
+							emptydict['phonenumber'] = company.details.phonenumber
+							emptydict['phonenumber_status'] = company.details.phonenumber_status
+							emptydict['website'] = company.details.website
+							emptydict['website_status'] = company.details.website_status
+							emptydict['activity'] = company.details.activties.activties
+						emptydict['status'] = company.status
+						emptydict['companyname_status'] = company.companyname_status
+						emptydict['legalentitytype_status'] = company.legalentitytype_status
+						emptydict['city_status'] = company.city_status
+						emptydict['street_status'] = company.street_status
+						emptydict['country_status'] = company.country_status
+						emptydict['postcode_status'] = company.postcode_status
+						emptydict['distance_status'] = True
 						emptylist.append(emptydict)
-				
-				for indivisual in profilesearch:
+			
+			for indivisual in profilesearch:
+				if indivisual.status:
 					indivisual_lontitude = indivisual.longitude
 					indivisual_latitude = indivisual.latitude
 					indivisual_distance =  distanceCal(longitude,latitude,indivisual_lontitude,indivisual_latitude)
 					if indivisual_distance <= intial_distance:
 						emptydict = {}
+						long_list.append(indivisual.longitude)
+						lat_list.append(indivisual.latitude)
 						emptydict['companyname'] = indivisual.companyname
 						emptydict['id'] = indivisual.id
 						emptydict['longitude'] = indivisual.longitude
 						emptydict['latitude'] = indivisual.latitude
 						emptydict['profile_type'] = 0
-						emptydict['descripiton'] = indivisual.details.descripiton
-						if indivisual.profile_pic:
-							emptydict['profile_image'] = settings.BASE_URL+indivisual.profile_pic.url
-						else:
-							emptydict['profile_image'] = ""
+						emptydict['description'] = indivisual.details.descripiton
+						emptydict['location'] = indivisual.state
+						emptydict['legalentitytype'] = indivisual.legalentitytype.name
+						emptydict['legalentityid'] = indivisual.legalentitytype.id
+						emptydict['street'] = indivisual.state
+						emptydict['city'] = indivisual.city
+						emptydict['country'] = indivisual.country
+						emptydict['postcode'] = indivisual.postcode
+						emptydict['description'] = ""
+						emptydict['phonenumber'] = ""
+						emptydict['phonenumber_status'] = False
+						emptydict['website'] = ""
+						emptydict['website_status'] = False
+						emptydict['activity'] = ""
+						emptydict['activity_status']= indivisual.activity_status
+						if indivisual.details:
+							emptydict['description'] = indivisual.details.descripiton
+							emptydict['phonenumber'] = indivisual.details.phonenumber
+							emptydict['phonenumber_status'] = indivisual.details.phonenumber_status
+							emptydict['website'] = indivisual.details.website
+							emptydict['website_status'] = indivisual.details.website_status
+							emptydict['activity'] = indivisual.details.activties.activties
+						emptydict['status'] = indivisual.status
+						emptydict['companyname_status'] = indivisual.companyname_status
+						emptydict['legalentitytype_status'] = indivisual.legalentitytype_status
+						emptydict['city_status'] = indivisual.city_status
+						emptydict['street_status'] = indivisual.state_status
+						emptydict['country_status'] = indivisual.country_status
+						emptydict['postcode_status'] = indivisual.postcode_status
+						emptydict['profile_image'] = indivisual.getSingleImageUrl()
 						emptydict['other_images'] = indivisual.getAllImages()
-						emptydict['distance'] = indivisual_distance
+						if clongitude and clatitude:
+							emptydict['companydistance'] = distanceCal(clongitude,clatitude,indivisual_lontitude,indivisual_latitude)
+						else:
+							emptydict['companydistance'] = indivisual_distance
+						emptydict['distance_status'] = True
 						emptylist.append(emptydict)
-				# print(emptylist)
-				if emptylist:
-					content = {
-					'status':'success',
-					'comapnydata': emptylist
-					}
-					return Response(content)
+			# print(emptylist)
+			if emptylist:
+				if len(lat_list) == 1:
+					centred_lat = lat_list[0]
+					centred_long = long_list[0]
 				else:
-					raise exceptions.ParseError("No result found.")
+					centred_lat = sum(lat_list)/len(lat_list)
+					centred_long = sum(long_list)/len(long_list)
+				content = {
+				'status':'success',
+				'comapnydata': emptylist,
+				'centred_cordinates':{"lat":centred_lat,"long":centred_long}
+				}
+				return Response(content)
+			else:
+				raise exceptions.ParseError("No result found.")
 		except Exception as e:
 			raise e
 			raise exceptions.ParseError("Invalid Search.")
@@ -832,30 +1014,60 @@ class Search(views.APIView):
 		
 
 class Message(views.APIView):
-	authentication_classes = ( SessionAuthentication,JSONWebTokenAuthentication)
-	permission_classes = (IsAuthenticated,)
 	def post(self, request, *args, **kwargs):
+		print(request.data)
 		try:
+			user_id = request.data.get("id")
+			if not user_id:
+				user_id = request.POST.get("id")
 			email = request.data.get("email")
-			
+			if not email:
+				email = request.POST.get("email")
+			name = request.data.get("name")
+			if not email:
+				name = request.POST.get("name")
 			message = request.data.get("message")
+			if not message:
+				message = request.POST.get("message")
+			profile_types = request.data.get("profile_type")
+			profile_type = str(profile_types)
+			if not profile_type:
+				profile_type = request.POST.get("profile_type")
+			full_message = """You have got new message from """
+			full_message += "\n"+name+"\n"
+			full_message += "\n"+email+"\n"
+
+			full_message += message
 			if not email:
 				raise exceptions.ParseError("email cannot be blank.")
 			elif not re.match(r"^[A-Za-z0-9\.\+_-]+@[A-Za-z0-9\._-]+\.[a-zA-Z]*$", email):
 				raise exceptions.ParseError("enter valid email address.")
 			elif not message:
 				raise exceptions.ParseError("message cannot be blank .")
-			try:
-				user = User.objects.get(email=email)
-				if user is not None:
-					email = EmailMessage('Message', message , to=[email])
-					email.send()
-			except User.DoesNotExist:
-				raise exceptions.ParseError("email not registered .")
-			content = {
-			'status':'success',
-			'message':'message sent .'
-			}
+
+			user_mail = None
+			if int(profile_type)==1:
+				user=CompanyProfile.objects.get(id=user_id)
+				user_mail = user.owner.email
+			else:
+				user=Profile.objects.get(id=user_id)
+				user_mail = user.users.email
+				# user = User.objects.get(id=user_id)
+				# user_mail = user.email
+
+			if user_mail:
+				email = EmailMessage('Message', full_message , to=[user_mail])
+				email.send()
+				content = {
+					'status':'success',
+					'message':'message sent .'
+				}
+			else:
+				content = {
+					'status':'error',
+					'message':'message sent failed.'
+				}
+		
 			return Response(content)
 		except Exception as e:
 			raise e
@@ -863,10 +1075,16 @@ class Message(views.APIView):
 
 
 class Activities(views.APIView):
-	authentication_classes = ( SessionAuthentication,JSONWebTokenAuthentication)
-	permission_classes = (IsAuthenticated,)
+	
 	def get(self, request, *args, **kwargs):
-		activities = Activties.objects.all()
+		user_type = request.data.get("user_type")
+		if not user_type:
+				user_type = request.GET.get("user_type")
+		activities = []
+		if int(user_type) == 1:
+			activities = CompanyActivties.objects.all()
+		else:
+			activities = Activties.objects.all()
 		activities_list = []
 		for activity in activities:
 			activities_list.append({"id":activity.id,"name":activity.activties})
@@ -875,3 +1093,45 @@ class Activities(views.APIView):
 			"data":activities_list
 		}
 		return Response(response)
+
+
+class LegelEntityView(views.APIView):
+
+	def get(self, request):
+		legalentitytype = LegelEntity.objects.all()
+		legalentitytype_list = []
+		for legalentitytypes in legalentitytype:
+			legalentitytype_list.append({"id":legalentitytypes.id,"name":legalentitytypes.name})
+		response = {
+			"status":'success',
+			"data":legalentitytype_list
+		}
+		return Response(response)
+
+
+class MarkersImages(views.APIView):
+	def get(self, request, *args, **kwargs):
+		response = {
+			"status":'success',
+			"data":{
+			"comapny_marker":settings.BASE_URL+"/media/images/individual.png",
+			"current_marker":settings.BASE_URL+"/media/images/current_location.png",
+			"individual_marker":settings.BASE_URL+"/media/images/company.png"
+			}
+		}
+		return Response(response)
+
+
+
+class DeleteCompany(views.APIView):
+	authentication_classes = ( SessionAuthentication,JSONWebTokenAuthentication)
+	permission_classes = (IsAuthenticated,)
+	def post(self, request, *args, **kwargs):
+		company_id = request.data.get("id")
+		if not company_id:
+			company_id = request.POST.get("id")
+		CompanyProfile.objects.filter(id=int(company_id)).delete()
+		return Response({
+			"status":'success',
+			"message":"Company is deleted successfully."
+			})
