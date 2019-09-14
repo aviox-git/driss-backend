@@ -1,11 +1,51 @@
 <!DOCTYPE html>
 <html>
 <head>
-	<title></title>
+	  <title>Data Import</title>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.0/css/bootstrap.min.css">
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+  <script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.0/js/bootstrap.min.js"></script>
+  <style type="text/css">
+  	.custom-setting{
+  		padding: 50px;
+  	}
+  	.success{
+  		color: green;
+  		margin-top: 50px;
+  	}
+  	.error{
+  		color: red;
+  		margin-top: 50px;
+  	}
+  </style>
 </head>
 <body>
-<form>
-	<h1>test upload page</h1>
+<center>
+	{% if messages %}
+	<ul class="messages" style="float:left;">
+	    {% for message in messages %}
+	    <li{% if message.tags %} class="{{ message.tags }}"{% endif %} >{{ message }}</li>
+	    {% endfor %}
+	</ul>
+{% endif %}
+<form class="form-inline custom-setting" method="post" action="" enctype="multipart/form-data">
+	{% csrf_token %}
+	<div class="form-group">
+      	<label for="user_csv">Users:</label>
+		<input type="file" class="form-control" name="userdata" id="user_csv" accept=".csv">
+	</div>
+	<button type="submit" class="btn btn-default">Submit</button>
 </form>
+<form class="form-inline custom-setting" method="post" action="{% url 'companyimportdata' %}" enctype="multipart/form-data">
+	{% csrf_token %}
+	<div class="form-group">
+      	<label for="company_csv">Companies:</label>
+		<input type="file" class="form-control" name="companydata" id="company_csv" accept=".csv">
+	</div>
+	<button type="submit" class="btn btn-default">Submit</button>
+</form>
+</center>
 </body>
 </html>
