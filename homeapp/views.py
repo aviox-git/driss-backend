@@ -50,7 +50,7 @@ class Homepage(TemplateView):
 					latitude=data["latitude"],
 					legalentitytype=legelentuty,
 					details=activities,
-					types=1,
+					types=1
 				)
 				customer.save()
 			except Exception as e:
@@ -71,16 +71,14 @@ class CompanyData(View):
 		for data in reader:
 			try:
 				user = User.objects.filter(email=data["user_email"])
-				existing_profile = Profile.objects.filter(companyname=data["name"],phone=data["phone"])
-				if not user or existing_profile:
+				if not user:
 					continue
 				legelentuty = LegelEntity.objects.all()[0]
 				activities = CompanyActivtiesDetail.objects.all()[0]
 
 				company = CompanyProfile.objects.create(
-					users=user,
+					owner=user[0],
 					companyname=data["name"],
-					phone=data["phone"],
 					city=data["city"],
 					street=data["street"],
 					country=data["country"],
@@ -89,7 +87,7 @@ class CompanyData(View):
 					latitude=data["latitude"],
 					legalentitytype=legelentuty,
 					details=activities,
-					types=1,
+					types=0
 				)
 				company.save()
 			except Exception as e:
