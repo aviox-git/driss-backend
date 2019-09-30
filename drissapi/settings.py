@@ -92,7 +92,7 @@ WSGI_APPLICATION = 'drissapi.wsgi.application'
 
 
 
-BASE_URL="https://smartartech.org/api"
+BASE_URL="http://104.248.228.29:3333"
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp.gmail.com'
 EMAIL_USE_TLS = True
@@ -218,7 +218,7 @@ SOCIAL_AUTH_PIPELINE = (
 
 
 AUTH0_DOMAIN = 'https://dev-1gq9bmi0.auth0.com/'
-API_IDENTIFIER = 'http://104.248.228.29:2222/api/'
+API_IDENTIFIER = 'http://104.248.228.29:3333/api/'
 PUBLIC_KEY = None
 JWT_ISSUER = None
 
