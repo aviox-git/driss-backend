@@ -37,6 +37,7 @@ router.add_api_view('message', path('message', Message.as_view(), name=r"message
 router.add_api_view('activities', path('activities', Activities.as_view(), name=r"activities"))
 router.add_api_view('legalentity', path('legalentity', LegelEntityView.as_view(), name=r"legalentity"))
 router.add_api_view('markers', path('markers-images', MarkersImages.as_view(), name=r"markers_images"))
+router.add_api_view('searchlocation', path('searchlocation', SearchLocation.as_view(), name=r"searchlocation"))
 # router.add_api_view('api-auth',path('api-token-auth/', obtain_jwt_token))
 urlpatterns = [
     path('admin/', admin.site.urls),

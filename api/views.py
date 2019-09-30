@@ -34,6 +34,7 @@ from django.utils import timezone
 from datetime import datetime, timedelta
 import datetime
 from math import radians, cos, sin, asin, sqrt
+from itertools import chain
 
 
 def generateOTP(): 
@@ -1135,3 +1136,36 @@ class DeleteCompany(views.APIView):
 			"status":'success',
 			"message":"Company is deleted successfully."
 			})
+
+
+class SearchLocation(views.APIView):
+	def get(self,request,):
+		try:
+			company_list=[]
+			
+
+			keyword=request.data.get('keyword','')
+			
+			if not keyword:
+				keyword = request.GET.get('keyword','')
+			print(">>>>>",keyword)
+			company_name = CompanyProfile.objects.filter(companyname__icontains=keyword).values('companyname')
+		
+			profile_company = Profile.objects.filter(companyname__icontains=keyword).values('companyname')
+			
+			Q = list(chain(company_name , profile_company))
+			#Combined_Q = company_name | profile_company
+			# company_list.append(company_name)
+			# profile_list.append(profile_company)
+			# profile_list.extend(company_list)
+			response = {
+			"status":'success',
+			"data": Q
+			}
+			return Response(response)
+
+		except Exception as e:
+			raise e
+			raise exceptions.ParseError("Invalid Search.")
+
+
