@@ -1148,19 +1148,14 @@ class SearchLocation(views.APIView):
 			
 			if not keyword:
 				keyword = request.GET.get('keyword','')
-			print(">>>>>",keyword)
 			company_name = CompanyProfile.objects.filter(companyname__icontains=keyword).values('companyname')
-		
 			profile_company = Profile.objects.filter(companyname__icontains=keyword).values('companyname')
-			
-			Q = list(chain(company_name , profile_company))
-			#Combined_Q = company_name | profile_company
-			# company_list.append(company_name)
-			# profile_list.append(profile_company)
-			# profile_list.extend(company_list)
+			items= list(chain(company_name , profile_company))
+			if len(items)>5:
+				items = items[:5]
 			response = {
 			"status":'success',
-			"data": Q
+			"data": items
 			}
 			return Response(response)
 
